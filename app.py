@@ -78,15 +78,16 @@ def render_return_box(period_title, ticker_label, bench_label, stock_ret, bench_
     def f(val):
         if val is None: return "N/A"
         color = "#00c853" if val >= 0 else "#ff1744"
-        return f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{val:+.2f}%</span>"
+        return f"<p style='margin:0; font-size:20px; font-weight:bold; color:{color};'>{val:+.2f}%</p>"
     return f"""
-    <div style='background-color:rgba(255,255,255,0.06); padding:14px; border-radius:8px; height:130px'>
-        <p style='font-size:16px; font-weight:bold; margin-bottom:6px; color:#ffd700'>{period_title}</p>
-        <p style='font-size:12px; margin:0; color:#aaa'>{ticker_label}</p>
+    <div style='background-color:rgba(255,255,255,0.06); padding:16px; border-radius:10px; height:160px; border:1px solid rgba(255,255,255,0.1)'>
+        <p style='font-size:14px; font-weight:bold; margin:0 0 8px 0; color:#ffd700; text-transform:uppercase; letter-spacing:0.5px'>{period_title}</p>
+        <p style='font-size:11px; margin:0; color:#aaa; font-weight:500'>{ticker_label}</p>
         {f(stock_ret)}
-        <br>
-        <p style='font-size:12px; margin:2px 0 0; color:#aaa'>{bench_label}</p>
-        {f(bench_ret)}
+        <div style='margin-top:10px;'>
+            <p style='font-size:11px; margin:0; color:#aaa; font-weight:500'>{bench_label}</p>
+            {f(bench_ret)}
+        </div>
     </div>"""
 
 def build_excel(ticker, inc_df, bs_df, ratios_df, peers_df):
