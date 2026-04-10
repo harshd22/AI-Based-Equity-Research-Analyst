@@ -288,8 +288,8 @@ if run_btn and ticker:
                 sum_cols = st.columns(len(sum_df))
                 for i, row in enumerate(sum_df.itertuples(index=False)):
                     with sum_cols[i % len(sum_df)]:
-                        name = getattr(row, sum_df.columns[0])
-                        val = getattr(row, latest_col)
+                        name = row[0]
+                        val = row[-1]
                         st.metric(name, val)
             else:
                 st.info("Institutional shareholding data not available for this ticker.")
