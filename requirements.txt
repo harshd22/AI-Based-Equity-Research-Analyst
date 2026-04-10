@@ -1,0 +1,12 @@
+streamlit
+yfinance
+pandas
+plotly
+smolagents
+duckduckgo-search
+python-dotenv
+requests
+beautifulsoup4
+lxml
+python-dateutil
+litellm
