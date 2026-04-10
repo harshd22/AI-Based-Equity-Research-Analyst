@@ -332,8 +332,8 @@ if run_btn and ticker:
     with tab7:
         st.subheader("🏭 Sector Positioning & Peer Comparison")
 
-        # ── Screener Pros & Cons ─────────────────────────────────────
-        with st.spinner("Fetching Screener.in insights & peer data..."):
+        # ── Institutional Pros & Cons ────────────────────────────────
+        with st.spinner("Fetching institutional insights & peer data..."):
             insights = get_screener_insights(ticker)
             ratings  = get_credit_ratings(ticker)
             peers_df, target = get_sector_peers(ticker)
@@ -341,13 +341,17 @@ if run_btn and ticker:
         if insights['pros'] or insights['cons']:
             pc1, pc2 = st.columns(2)
             with pc1:
-                st.markdown("**✅ Pros (Screener.in)**")
+                st.markdown("**✅ Pros**")
                 for p in insights['pros']:
                     st.markdown(f"<div style='background:rgba(0,200,83,0.1);border-left:3px solid #00c853;padding:6px 10px;margin:4px 0;border-radius:4px;font-size:13px'>✔ {p}</div>", unsafe_allow_html=True)
             with pc2:
-                st.markdown("**❌ Cons (Screener.in)**")
+                st.markdown("**❌ Cons**")
                 for c in insights['cons']:
                     st.markdown(f"<div style='background:rgba(255,23,68,0.1);border-left:3px solid #ff1744;padding:6px 10px;margin:4px 0;border-radius:4px;font-size:13px'>✖ {c}</div>", unsafe_allow_html=True)
+            st.divider()
+        else:
+            if is_indian:
+                st.info("Institutional Pros/Cons not available for this specific company.")
             st.divider()
 
         # ── Credit Ratings ───────────────────────────────────────────
@@ -386,40 +390,43 @@ if run_btn and ticker:
         if inst_data:
             st.subheader("🔬 Institutional Intelligence Dashboard")
             
-            # --- ROW 1: SHAREHOLDING & GROWTH ---
-            r1c1, r1c2 = st.columns([1, 1])
+            # --- Ownership Structure ---
+            st.markdown("### 🤝 Ownership Structure")
+            shp = inst_data['shareholding']
+            if shp is not None:
+                # Latest quarter is the last column
+                latest_col = shp.columns[-1]
+                categories = shp.iloc[:, 0].tolist()
+                values = pd.to_numeric(shp[latest_col].str.replace('%',''), errors='coerce').fillna(0).tolist()
+                
+                fig_shp = go.Figure(data=[go.Pie(
+                    labels=categories, values=values, hole=.4,
+                    marker_colors=['#ffd700', '#3498db', '#2ecc71', '#e74c3c', '#9b59b6', '#f39c12']
+                )])
+                fig_shp.update_layout(
+                    showlegend=True, margin=dict(t=0, b=0, l=0, r=0),
+                    height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_shp, use_container_width=True)
+                
+                with st.expander("Show Historical Ownership Table"):
+                    st.dataframe(shp, use_container_width=True)
             
-            with r1c1:
-                st.markdown("### 🤝 Ownership Structure")
-                shp = inst_data['shareholding']
-                if shp is not None:
-                    # Latest quarter is the last column
-                    latest_col = shp.columns[-1]
-                    categories = shp.iloc[:, 0].tolist()
-                    values = pd.to_numeric(shp[latest_col].str.replace('%',''), errors='coerce').fillna(0).tolist()
-                    
-                    fig_shp = go.Figure(data=[go.Pie(
-                        labels=categories, values=values, hole=.4,
-                        marker_colors=['#ffd700', '#3498db', '#2ecc71', '#e74c3c', '#9b59b6', '#f39c12']
-                    )])
-                    fig_shp.update_layout(
-                        showlegend=True, margin=dict(t=0, b=0, l=0, r=0),
-                        height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-                    )
-                    st.plotly_chart(fig_shp, use_container_width=True)
-                    
-                    with st.expander("Show Historical Ownership Table"):
-                        st.dataframe(shp, use_container_width=True)
-            
-            with r1c2:
-                st.markdown("### 📉 Multi-Year Growth Track")
-                for growth in inst_data['growth']:
-                    st.markdown(f"**{growth['title']}**")
-                    st.table(growth['df'])
-
             st.divider()
 
-            # --- ROW 2: CASH FLOWS ---
+            # --- Multi-Year Growth ---
+            st.markdown("### 📉 Multi-Year Growth Track")
+            growth_counts = len(inst_data['growth'])
+            if growth_counts > 0:
+                gcols = st.columns(2) # Show growth tables in 2 columns to save vertical space but still "one by one" flow
+                for i, growth in enumerate(inst_data['growth']):
+                    with gcols[i % 2]:
+                        st.markdown(f"**{growth['title']}**")
+                        st.table(growth['df'])
+            
+            st.divider()
+
+            # --- Cash Flows ---
             st.markdown("### 💸 Corporate Cash Flow Statement")
             cf = inst_data['cash_flow']
             if cf is not None:
@@ -427,7 +434,7 @@ if run_btn and ticker:
             
             st.divider()
 
-            # --- ROW 3: INVESTOR LIBRARY ---
+            # --- Investor Documents ---
             st.markdown("### 📂 Investor Documents & Library")
             docs = inst_data['documents']
             if docs:
