@@ -266,21 +266,46 @@ if run_btn and ticker:
             st.info("No recent news found.")
 
     with tab5:
-        st.subheader("Shareholding Pattern")
-        holders = get_holders(ticker)
-        h1, h2, h3 = st.columns(3)
-        with h1:
-            st.markdown("**📌 Major Holders**")
-            if holders['major'] is not None: st.dataframe(holders['major'], use_container_width=True)
-            else: st.info("Not available.")
-        with h2:
-            st.markdown("**🏛️ Top Institutions**")
-            if holders['institutional'] is not None: st.dataframe(holders['institutional'], use_container_width=True)
-            else: st.info("Not available.")
-        with h3:
-            st.markdown("**💼 Top Mutual Funds**")
-            if holders['mutual_fund'] is not None: st.dataframe(holders['mutual_fund'], use_container_width=True)
-            else: st.info("Not available.")
+        st.subheader("🤝 Shareholding Analysis")
+        if is_indian:
+            inst_data = get_institutional_data(ticker)
+            if inst_data and inst_data['shareholding'] is not None:
+                st.markdown("### Quarterly Shareholding Pattern (%)")
+                shp = inst_data['shareholding']
+                
+                # Exclude 'No. of Shareholders' from the display table too for a cleaner look
+                shp_clean = shp[~shp.iloc[:,0].str.contains('No. of Shareholders', na=False, case=False)].copy()
+                st.dataframe(shp_clean.style.format(na_rep="—"), use_container_width=True)
+                
+                st.divider()
+                st.markdown("### Institutional Summary")
+                # Summary metrics
+                latest_col = shp_clean.columns[-1]
+                # Filter categories and clean their names
+                sum_df = shp_clean.copy()
+                sum_df.iloc[:,0] = sum_df.iloc[:,0].str.replace('+', '', regex=False).str.strip()
+                
+                sum_cols = st.columns(len(sum_df))
+                for i, row in enumerate(sum_df.itertuples(index=False)):
+                    with sum_cols[i % len(sum_df)]:
+                        name = getattr(row, sum_df.columns[0])
+                        val = getattr(row, latest_col)
+                        st.metric(name, val)
+            else:
+                st.info("Institutional shareholding data not available for this ticker.")
+        else:
+            # Fallback to yfinance for International stocks
+            holders = get_holders(ticker)
+            h1, h2 = st.columns(2)
+            with h1:
+                st.markdown("**📌 Major Holders**")
+                if holders['major'] is not None: st.dataframe(holders['major'], use_container_width=True)
+                else: st.info("Not available.")
+            with h2:
+                st.markdown("**🏛️ Institutional & Mutual Funds**")
+                if holders['institutional'] is not None: st.dataframe(holders['institutional'], use_container_width=True)
+                elif holders['mutual_fund'] is not None: st.dataframe(holders['mutual_fund'], use_container_width=True)
+                else: st.info("Not available.")
 
     with tab6:
         st.subheader("Earnings Analysis")
@@ -443,10 +468,14 @@ if run_btn and ticker:
             st.markdown("### 🤝 Ownership Structure")
             shp = inst_data['shareholding']
             if shp is not None:
+                # Filter out 'No. of Shareholders' as it explodes the chart scale
+                shp_filtered = shp[~shp.iloc[:, 0].str.contains('No. of Shareholders', na=False, case=False)].copy()
+                
                 # Latest quarter is the last column
-                latest_col = shp.columns[-1]
-                categories = shp.iloc[:, 0].tolist()
-                values = pd.to_numeric(shp[latest_col].str.replace('%',''), errors='coerce').fillna(0).tolist()
+                latest_col = shp_filtered.columns[-1]
+                # Clean names (remove +)
+                categories = shp_filtered.iloc[:, 0].str.replace('+', '', regex=False).str.strip().tolist()
+                values = pd.to_numeric(shp_filtered[latest_col].str.replace('%',''), errors='coerce').fillna(0).tolist()
                 
                 fig_shp = go.Figure(data=[go.Pie(
                     labels=categories, values=values, hole=.4,
