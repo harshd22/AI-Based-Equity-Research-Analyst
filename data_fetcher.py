@@ -598,3 +598,54 @@ def get_institutional_data(ticker: str):
     except: pass
 
     return data
+
+def get_screener_financials(ticker: str):
+    """
+    Scrapes detailed Financials (Quarters, P&L, Balance Sheet) from Screener.in.
+    Specifically for Indian stocks. Returns a dict of DataFrames.
+    """
+    is_indian = ticker.endswith(".NS") or ticker.endswith(".BO")
+    if not is_indian: return None
+
+    slug = _get_screener_slug(ticker)
+    url = f"https://www.screener.in/company/{slug}/"
+    try:
+        r = requests.get(url, headers=SCREENER_HEADERS, timeout=12)
+        if r.status_code != 200: return None
+        soup = BeautifulSoup(r.text, "lxml")
+    except: return None
+
+    def clean_df(section_id):
+        try:
+            sec = soup.find('section', id=section_id)
+            if not sec: return None
+            table = sec.find('table')
+            if not table: return None
+            import io
+            df = pd.read_html(io.StringIO(str(table)))[0]
+            
+            # Clean first column (Row Names)
+            # Row names have things like "Sales+"
+            # We want to remove icons like \ufffd, +, etc.
+            if not df.empty:
+                def clean_text(text):
+                    if not isinstance(text, str): return text
+                    # Remove "", "+", and typical expansion icons
+                    text = text.replace('\ufffd', '').replace('+', '').strip()
+                    # Remove leading/trailing whitespace
+                    return text
+                df.iloc[:, 0] = df.iloc[:, 0].apply(clean_text)
+                
+                # Rename the first column to "Metrics"
+                cols = list(df.columns)
+                cols[0] = "Metrics"
+                df.columns = cols
+                df.set_index("Metrics", inplace=True)
+            return df
+        except: return None
+
+    return {
+        'quarters': clean_df('quarters'),
+        'pnl': clean_df('profit-loss'),
+        'balance_sheet': clean_df('balance-sheet')
+    }

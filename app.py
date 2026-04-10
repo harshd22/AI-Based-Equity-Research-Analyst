@@ -17,7 +17,7 @@ from data_fetcher import (
     get_holders, get_earnings_history,
     get_key_ratios, get_sector_peers, get_dividend_history,
     get_news_with_sentiment, get_screener_insights, get_credit_ratings,
-    get_institutional_data
+    get_institutional_data, get_screener_financials
 )
 
 # Load environment variables from .env file in the same directory
@@ -310,24 +310,73 @@ if run_btn and ticker:
             else:
                 st.info("EPS history not available.")
 
-        with col_rev:
-            st.markdown("**Revenue vs. Net Earnings**")
-            period_rev = st.radio("Period:", ["Annual", "Quarterly"], horizontal=True, key="rev_toggle")
-            _, _, inc_df, _ = get_financial_statements(ticker, period=period_rev)
-            if inc_df is not None and not inc_df.empty:
-                rev_row = next((r for r in ['Total Revenue', 'Operating Revenue'] if r in inc_df.index), None)
-                earn_row = next((r for r in ['Net Income', 'Net Income From Continuing Operations'] if r in inc_df.index), None)
-                if rev_row and earn_row:
-                    plot_df = inc_df.loc[[rev_row, earn_row]].T.sort_index(ascending=True)
-                    fig_bar = go.Figure()
-                    fig_bar.add_trace(go.Bar(x=plot_df.index, y=plot_df[rev_row], name='Revenue', marker_color='#3498db', opacity=0.85))
-                    fig_bar.add_trace(go.Bar(x=plot_df.index, y=plot_df[earn_row], name='Net Earnings', marker_color='#f39c12', opacity=0.85))
-                    fig_bar.update_layout(barmode='group', height=380, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', bargap=0.2)
-                    st.plotly_chart(fig_bar, use_container_width=True)
-                else:
-                    st.info("Could not find Revenue/Earnings rows in financials.")
+        if is_indian:
+            # ── Screener Financials (Indian Stocks) ───────────────────
+            fin_data = get_screener_financials(ticker)
+            if fin_data:
+                st.markdown("### 📊 Quarterly Results")
+                if fin_data['quarters'] is not None:
+                    st.dataframe(fin_data['quarters'].style.format(na_rep="—"), use_container_width=True)
+                
+                st.divider()
+
+                mcol1, mcol2 = st.columns([2, 1])
+                with mcol1:
+                    st.markdown("### 📈 Profit & Loss (Annual)")
+                    if fin_data['pnl'] is not None:
+                        st.dataframe(fin_data['pnl'].style.format(na_rep="—"), use_container_width=True)
+                
+                with mcol2:
+                    st.markdown("#### Performance Trend")
+                    if fin_data['pnl'] is not None:
+                        # Extract Sales and Net Profit for Chart
+                        pnl = fin_data['pnl']
+                        rev_row = next((r for r in pnl.index if 'Sales' in r), None)
+                        earn_row = next((r for r in pnl.index if 'Net Profit' in r), None)
+                        if rev_row and earn_row:
+                            # Drop TTM for charting clean history
+                            plot_cols = [c for c in pnl.columns if c != 'TTM']
+                            plot_df = pnl.loc[[rev_row, earn_row], plot_cols].T
+                            # Convert to numeric
+                            plot_df = plot_df.apply(pd.to_numeric, errors='coerce')
+                            
+                            fig_bar = go.Figure()
+                            fig_bar.add_trace(go.Bar(x=plot_df.index, y=plot_df[rev_row], name='Sales', marker_color='#3498db', opacity=0.85))
+                            fig_bar.add_trace(go.Bar(x=plot_df.index, y=plot_df[earn_row], name='Profit', marker_color='#f39c12', opacity=0.85))
+                            fig_bar.update_layout(barmode='group', height=350, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', bargap=0.2, margin=dict(l=0,r=0,t=20,b=20))
+                            st.plotly_chart(fig_bar, use_container_width=True)
+
+                st.divider()
+                st.markdown("### 🏦 Balance Sheet")
+                if fin_data['balance_sheet'] is not None:
+                    st.dataframe(fin_data['balance_sheet'].style.format(na_rep="—"), use_container_width=True)
             else:
-                st.info("Financials not available.")
+                st.info("Institutional financials not available for this ticker.")
+        else:
+            # ── yfinance Financials (International Stocks) ────────────
+            col_rev, col_eps = st.columns(2)
+            with col_rev:
+                st.markdown("**Revenue vs. Net Earnings**")
+                period_rev = st.radio("Period:", ["Annual", "Quarterly"], horizontal=True, key="rev_toggle")
+                _, _, inc_df, _ = get_financial_statements(ticker, period=period_rev)
+                if inc_df is not None and not inc_df.empty:
+                    rev_row = next((r for r in ['Total Revenue', 'Operating Revenue'] if r in inc_df.index), None)
+                    earn_row = next((r for r in ['Net Income', 'Net Income From Continuing Operations'] if r in inc_df.index), None)
+                    if rev_row and earn_row:
+                        plot_df = inc_df.loc[[rev_row, earn_row]].T.sort_index(ascending=True)
+                        fig_bar = go.Figure()
+                        fig_bar.add_trace(go.Bar(x=plot_df.index, y=plot_df[rev_row], name='Revenue', marker_color='#3498db', opacity=0.85))
+                        fig_bar.add_trace(go.Bar(x=plot_df.index, y=plot_df[earn_row], name='Net Earnings', marker_color='#f39c12', opacity=0.85))
+                        fig_bar.update_layout(barmode='group', height=380, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', bargap=0.2)
+                        st.plotly_chart(fig_bar, use_container_width=True)
+                    else:
+                        st.info("Could not find Revenue/Earnings rows.")
+                else:
+                    st.info("Financials not available.")
+            
+            with col_eps:
+                st.markdown("**EPS & Earnings Surprise**")
+                # ... Existing EPS chart logic ...
 
     with tab7:
         st.subheader("🏭 Sector Positioning & Peer Comparison")
