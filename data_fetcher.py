@@ -498,9 +498,10 @@ def get_key_metrics(ticker: str):
     else:
         shares_os_str = shares_os
     try:
-        bench = yf.Ticker("^NSEI" if ticker.endswith(".NS") or ticker.endswith(".BO") else "^GSPC")
-        bench_price = bench.history(period="1d")['Close'].iloc[-1]
-        bench_price = round(bench_price, 2)
+        bench_ticker = "^NSEI" if ticker.endswith(".NS") or ticker.endswith(".BO") else "^GSPC"
+        bench = yf.Ticker(bench_ticker)
+        b_hist = bench.history(period="1d")
+        bench_price = round(b_hist['Close'].iloc[-1], 2) if not b_hist.empty else 'N/A'
     except:
         bench_price = 'N/A'
     return {
@@ -521,3 +522,79 @@ def get_key_metrics(ticker: str):
         "benchmark_price": bench_price,
         "description": info.get('longBusinessSummary', '')
     }
+
+def get_institutional_data(ticker: str):
+    """
+    Scrapes Shareholding, Growth CAGR, Cash Flow, and Documents.
+    Optimized to use a single page request.
+    """
+    is_indian = ticker.endswith(".NS") or ticker.endswith(".BO")
+    if not is_indian: return None
+    
+    slug = _get_screener_slug(ticker)
+    url = f"https://www.screener.in/company/{slug}/"
+    try:
+        r = requests.get(url, headers=SCREENER_HEADERS, timeout=12)
+        if r.status_code != 200: return None
+        soup = BeautifulSoup(r.text, "lxml")
+    except: return None
+
+    data = {
+        'shareholding': None,
+        'growth': [],
+        'cash_flow': None,
+        'documents': []
+    }
+
+    # 1. Shareholding Table
+    try:
+        shp_sec = soup.find('section', id='shareholding')
+        if shp_sec:
+            table = shp_sec.find('table')
+            if table:
+                import io
+                df = pd.read_html(io.StringIO(str(table)))[0]
+                # Clean up: First column is Category, last columns are dates
+                df.columns = [str(c) for c in df.columns]
+                data['shareholding'] = df
+    except: pass
+
+    # 2. Compounded Growth (ranges-table)
+    try:
+        growth_tables = soup.find_all('table', class_='ranges-table')
+        for gt in growth_tables:
+            import io
+            df_g = pd.read_html(io.StringIO(str(gt)))[0]
+            # Rename columns to just 'Metric' and 'Value'
+            df_g.columns = ['Metric', 'Value']
+            # The title is in the first row usually or caption
+            title = gt.find('th').get_text(strip=True) if gt.find('th') else "Growth"
+            data['growth'].append({'title': title, 'df': df_g})
+    except: pass
+
+    # 3. Cash Flow Table
+    try:
+        cf_sec = soup.find('section', id='cash-flow')
+        if cf_sec:
+            table = cf_sec.find('table')
+            if table:
+                import io
+                df_cf = pd.read_html(io.StringIO(str(table)))[0]
+                data['cash_flow'] = df_cf
+    except: pass
+
+    # 4. Investor Documents
+    try:
+        doc_sec = soup.find('section', id='documents')
+        if doc_sec:
+            for a in doc_sec.find_all('a', href=True):
+                title = a.get_text(strip=True)
+                url = a['href']
+                if not url.startswith('http'):
+                    url = "https://www.screener.in" + url
+                data['documents'].append({'title': title, 'url': url})
+            # Limit to last 12
+            data['documents'] = data['documents'][:12]
+    except: pass
+
+    return data

@@ -16,7 +16,8 @@ from data_fetcher import (
     get_relative_performance, get_performance_returns,
     get_holders, get_earnings_history,
     get_key_ratios, get_sector_peers, get_dividend_history,
-    get_news_with_sentiment, get_screener_insights, get_credit_ratings
+    get_news_with_sentiment, get_screener_insights, get_credit_ratings,
+    get_institutional_data
 )
 
 # Load environment variables from .env file in the same directory
@@ -204,10 +205,10 @@ if run_btn and ticker:
     st.divider()
 
     # ── DATA TABS ─────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "📈 Relative Performance", "🕯️ Price Chart", "📋 Financials",
         "📰 News & Sentiment", "🏦 Holders", "💰 Earnings",
-        "🏭 Sector Positioning", "📊 Ratios & Dividends"
+        "🏭 Sector Positioning", "📊 Ratios & Dividends", "🔬 Institutional Insights"
     ])
 
     with tab1:
@@ -380,6 +381,79 @@ if run_btn and ticker:
 
             st.dataframe(peers_df.style.apply(highlight_row, axis=1).format(na_rep="—"), use_container_width=True, height=420)
 
+    with tab9:
+        inst_data = get_institutional_data(ticker)
+        if inst_data:
+            st.subheader("🔬 Institutional Intelligence Dashboard")
+            
+            # --- ROW 1: SHAREHOLDING & GROWTH ---
+            r1c1, r1c2 = st.columns([1, 1])
+            
+            with r1c1:
+                st.markdown("### 🤝 Ownership Structure")
+                shp = inst_data['shareholding']
+                if shp is not None:
+                    # Latest quarter is the last column
+                    latest_col = shp.columns[-1]
+                    categories = shp.iloc[:, 0].tolist()
+                    values = pd.to_numeric(shp[latest_col].str.replace('%',''), errors='coerce').fillna(0).tolist()
+                    
+                    fig_shp = go.Figure(data=[go.Pie(
+                        labels=categories, values=values, hole=.4,
+                        marker_colors=['#ffd700', '#3498db', '#2ecc71', '#e74c3c', '#9b59b6', '#f39c12']
+                    )])
+                    fig_shp.update_layout(
+                        showlegend=True, margin=dict(t=0, b=0, l=0, r=0),
+                        height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                    )
+                    st.plotly_chart(fig_shp, use_container_width=True)
+                    
+                    with st.expander("Show Historical Ownership Table"):
+                        st.dataframe(shp, use_container_width=True)
+            
+            with r1c2:
+                st.markdown("### 📉 Multi-Year Growth Track")
+                for growth in inst_data['growth']:
+                    st.markdown(f"**{growth['title']}**")
+                    st.table(growth['df'])
+
+            st.divider()
+
+            # --- ROW 2: CASH FLOWS ---
+            st.markdown("### 💸 Corporate Cash Flow Statement")
+            cf = inst_data['cash_flow']
+            if cf is not None:
+                st.dataframe(cf.style.format(na_rep="—"), use_container_width=True)
+            
+            st.divider()
+
+            # --- ROW 3: INVESTOR LIBRARY ---
+            st.markdown("### 📂 Investor Documents & Library")
+            docs = inst_data['documents']
+            if docs:
+                # Show in a grid
+                dcols = st.columns(3)
+                for i, doc in enumerate(docs):
+                    with dcols[i % 3]:
+                        icon = "📄"
+                        if "PPT" in doc['title'].upper() or "PRESENTATION" in doc['title'].upper(): icon = "📊"
+                        if "TRANSCRIPT" in doc['title'].upper(): icon = "🎙️"
+                        if "REC" in doc['title'].upper() or "VIDEO" in doc['title'].upper(): icon = "🎥"
+                        
+                        st.markdown(f"""
+                        <div style='background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:10px; border-left:4px solid #ffd700'>
+                            <p style='margin:0; font-size:13px; font-weight:bold;'>{icon} {doc['title']}</p>
+                            <a href='{doc['url']}' target='_blank' style='font-size:11px; color:#3498db'>View Document ↗</a>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("No corporate documents found for this period.")
+        else:
+            if not ticker.endswith(".NS") and not ticker.endswith(".BO"):
+                st.info("Institutional Deep-Dive is currently optimized for Indian stocks.")
+            else:
+                st.info("Advanced institutional data not available for this ticker.")
+
             # P/E ranking bar chart
             if 'P/E' in peers_df.columns:
                 pe_data = pd.to_numeric(peers_df['P/E'], errors='coerce').dropna().sort_values(ascending=True)
@@ -416,8 +490,8 @@ if run_btn and ticker:
                         plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
                     )
                     st.plotly_chart(fig_roce, use_container_width=True)
-        else:
-            st.info("Sector peer data not available for this ticker.")
+            else:
+                st.info("Sector peer data not available for this ticker.")
 
 
     with tab8:
