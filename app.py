@@ -273,8 +273,9 @@ if run_btn and ticker:
                 st.markdown("### Quarterly Shareholding Pattern (%)")
                 shp = inst_data['shareholding']
                 
-                # Exclude 'No. of Shareholders' from the display table too for a cleaner look
+                # Exclude 'No. of Shareholders' and clean the '+' symbol from row names
                 shp_clean = shp[~shp.iloc[:,0].str.contains('No. of Shareholders', na=False, case=False)].copy()
+                shp_clean.iloc[:,0] = shp_clean.iloc[:,0].str.replace('+', '', regex=False).str.strip()
                 st.dataframe(shp_clean.style.format(na_rep="—"), use_container_width=True)
                 
                 st.divider()
@@ -488,7 +489,10 @@ if run_btn and ticker:
                 st.plotly_chart(fig_shp, use_container_width=True)
                 
                 with st.expander("Show Historical Ownership Table"):
-                    st.dataframe(shp, use_container_width=True)
+                    # Clean names in the table too
+                    shp_disp = shp_filtered.copy()
+                    shp_disp.iloc[:,0] = shp_disp.iloc[:,0].str.replace('+', '', regex=False).str.strip()
+                    st.dataframe(shp_disp, use_container_width=True)
             
             st.divider()
 
