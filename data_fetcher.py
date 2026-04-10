@@ -543,7 +543,10 @@ def get_institutional_data(ticker: str):
         'shareholding': None,
         'growth': [],
         'cash_flow': None,
-        'documents': []
+        'announcements': [],
+        'annual_reports': [],
+        'concalls': [],
+        'credit_ratings': []
     }
 
     # 1. Shareholding Table
@@ -554,20 +557,17 @@ def get_institutional_data(ticker: str):
             if table:
                 import io
                 df = pd.read_html(io.StringIO(str(table)))[0]
-                # Clean up: First column is Category, last columns are dates
                 df.columns = [str(c) for c in df.columns]
                 data['shareholding'] = df
     except: pass
 
-    # 2. Compounded Growth (ranges-table)
+    # 2. Compounded Growth
     try:
         growth_tables = soup.find_all('table', class_='ranges-table')
         for gt in growth_tables:
             import io
             df_g = pd.read_html(io.StringIO(str(gt)))[0]
-            # Rename columns to just 'Metric' and 'Value'
             df_g.columns = ['Metric', 'Value']
-            # The title is in the first row usually or caption
             title = gt.find('th').get_text(strip=True) if gt.find('th') else "Growth"
             data['growth'].append({'title': title, 'df': df_g})
     except: pass
@@ -583,18 +583,47 @@ def get_institutional_data(ticker: str):
                 data['cash_flow'] = df_cf
     except: pass
 
-    # 4. Investor Documents
+    # 4. Announcements
+    try:
+        ann_sec = soup.find('section', id='announcements')
+        if ann_sec:
+            for a in ann_sec.find_all('a', class_='none'):
+                title = a.get_text(" ", strip=True)
+                url = a.get('href', '')
+                if url:
+                    if not url.startswith('http'): url = "https://www.screener.in" + url
+                    data['announcements'].append({'title': title, 'url': url})
+            data['announcements'] = data['announcements'][:10]
+    except: pass
+
+    # 5. Categorized Documents
     try:
         doc_sec = soup.find('section', id='documents')
         if doc_sec:
-            for a in doc_sec.find_all('a', href=True):
-                title = a.get_text(strip=True)
-                url = a['href']
-                if not url.startswith('http'):
-                    url = "https://www.screener.in" + url
-                data['documents'].append({'title': title, 'url': url})
-            # Limit to last 12
-            data['documents'] = data['documents'][:12]
+            # Annual Reports
+            ar_div = doc_sec.select_one('.annual-reports')
+            if ar_div:
+                for a in ar_div.find_all('a', href=True):
+                    data['annual_reports'].append({'title': a.get_text(strip=True), 'url': a['href']})
+            
+            # Concalls / Presentations
+            cc_div = doc_sec.select_one('.concalls')
+            if cc_div:
+                for a in cc_div.find_all('a', href=True):
+                    # These links often have text like "Transcript", "PPT", "REC"
+                    data['concalls'].append({'title': a.get_text(strip=True), 'url': a['href']})
+    except: pass
+
+    # 6. Credit Ratings (integrated)
+    try:
+        # Reuse logic from get_credit_ratings but on existing soup
+        for a in soup.select("a[href*='crisil'], a[href*='icra'], a[href*='care']"):
+            href = a.get("href", "")
+            if "crisil" in href or "icra" in href or "care" in href:
+                txt = a.get_text(" ", strip=True)
+                if txt and txt not in ["[1]", "[2]", "[3]"]:
+                    agency = "CRISIL" if "crisil" in href else ("ICRA" if "icra" in href else "CARE")
+                    data['credit_ratings'].append({'agency': agency, 'label': txt, 'url': href})
     except: pass
 
     return data

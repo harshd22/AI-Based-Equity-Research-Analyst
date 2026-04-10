@@ -516,27 +516,52 @@ if run_btn and ticker:
             
             st.divider()
 
-            # --- Investor Documents ---
-            st.markdown("### 📂 Investor Documents & Library")
-            docs = inst_data['documents']
-            if docs:
-                # Show in a grid
-                dcols = st.columns(3)
-                for i, doc in enumerate(docs):
-                    with dcols[i % 3]:
-                        icon = "📄"
-                        if "PPT" in doc['title'].upper() or "PRESENTATION" in doc['title'].upper(): icon = "📊"
-                        if "TRANSCRIPT" in doc['title'].upper(): icon = "🎙️"
-                        if "REC" in doc['title'].upper() or "VIDEO" in doc['title'].upper(): icon = "🎥"
-                        
+            # --- Investor Center ---
+            st.markdown("### 🏛️ Investor Center")
+            doc1, doc2, doc3, doc4 = st.columns([1.2, 1, 1, 1], gap="medium")
+            
+            with doc1:
+                st.markdown("**📢 Announcements**")
+                if inst_data['announcements']:
+                    for ann in inst_data['announcements']:
                         st.markdown(f"""
-                        <div style='background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:10px; border-left:4px solid #ffd700'>
-                            <p style='margin:0; font-size:13px; font-weight:bold;'>{icon} {doc['title']}</p>
-                            <a href='{doc['url']}' target='_blank' style='font-size:11px; color:#3498db'>View Document ↗</a>
+                        <div style='margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px'>
+                            <a href='{ann['url']}' target='_blank' style='font-size:12px; color:#3498db; text-decoration:none'>• {ann['title'][:60]}...</a>
                         </div>
                         """, unsafe_allow_html=True)
-            else:
-                st.info("No corporate documents found for this period.")
+                else:
+                    st.info("No recent announcements.")
+            
+            with doc2:
+                st.markdown("**📚 Annual Reports**")
+                if inst_data['annual_reports']:
+                    for ar in inst_data['annual_reports']:
+                        st.markdown(f"📄 <a href='{ar['url']}' target='_blank' style='font-size:12px; color:#aaa; text-decoration:none'>{ar['title']}</a>", unsafe_allow_html=True)
+                else:
+                    st.info("No reports found.")
+            
+            with doc3:
+                st.markdown("**🎙️ Concalls & PPTs**")
+                if inst_data['concalls']:
+                    for cc in inst_data['concalls']:
+                        icon = "📊" if "PRESENTATION" in cc['title'].upper() or "PPT" in cc['title'].upper() else "🎙️"
+                        st.markdown(f"{icon} <a href='{cc['url']}' target='_blank' style='font-size:12px; color:#aaa; text-decoration:none'>{cc['title']}</a>", unsafe_allow_html=True)
+                else:
+                    st.info("No concalls found.")
+            
+            with doc4:
+                st.markdown("**🏦 Credit Ratings**")
+                if inst_data['credit_ratings']:
+                    for cr in inst_data['credit_ratings'][:5]: # Show top 5
+                        badge = "#27ae60" if "AAA" in cr['label'] or "AA" in cr['label'] else "#e67e22"
+                        st.markdown(f"""
+                        <div style='background:rgba(255,255,255,0.06); padding:8px; border-radius:4px; margin-bottom:8px; border-left:3px solid {badge}'>
+                            <span style='font-size:10px; color:#888'>{cr['agency']}</span><br>
+                            <a href='{cr['url']}' target='_blank' style='font-size:11px; color:white; text-decoration:none'>{cr['label'][:30]}...</a>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No ratings found.")
         else:
             if not ticker.endswith(".NS") and not ticker.endswith(".BO"):
                 st.info("Institutional Deep-Dive is currently optimized for Indian stocks.")
